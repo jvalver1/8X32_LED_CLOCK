@@ -1,0 +1,29 @@
+# PlatformIO build output
+.pio/
+.cache/
+
+# VS Code workspace settings (keep .vscode/extensions.json if desired)
+.vscode/launch.json
+.vscode/c_cpp_properties.json
+.vscode/settings.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# PlatformIO project files that are auto-generated
+.pioenvs
+.piolibdeps
+compile_commands.json
+
+# Compiled object files
+*.o
+*.d
+*.map
+*.elf
+*.bin
+*.hex
+
+# Backup files
+*.bak
+*~

@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "author": "8x32 LED Clock Project",
+  "editor": "wokwi",
+
+  "parts": [
+
+    {
+      "type": "wokwi-arduino-nano",
+      "id": "nano",
+      "top": 300,
+      "left": 0,
+      "attrs": { "frequency": "16m" }
+    },
+
+    {
+      "type": "wokwi-led-matrix",
+      "id": "matrix",
+      "top": -120,
+      "left": -600,
+      "attrs": {
+        "cols": "32",
+        "rows": "8",
+        "layout": ""
+      }
+    },
+
+    {
+      "type": "chip-ds3231",
+      "id": "rtc",
+      "top": 300,
+      "left": 400,
+      "attrs": {}
+    },
+
+    {
+      "type": "chip-bmp280",
+      "id": "bmp280",
+      "top": 80,
+      "left": 400,
+      "attrs": {}
+    },
+
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn_mode",
+      "top": 550,
+      "left": -200,
+      "rotate": 0,
+      "attrs": {
+        "color": "green",
+        "label": "MODE"
+      }
+    },
+
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn_up",
+      "top": 550,
+      "left": -100,
+      "rotate": 0,
+      "attrs": {
+        "color": "blue",
+        "label": "UP"
+      }
+    },
+
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn_down",
+      "top": 550,
+      "left": 0,
+      "rotate": 0,
+      "attrs": {
+        "color": "red",
+        "label": "DOWN"
+      }
+    }
+
+  ],
+
+  "connections": [
+
+    ["nano:5V",    "matrix:VDD",  "red",    ["v-80", "h-620"]],
+    ["nano:GND.1", "matrix:VSS",  "black",  ["v-60", "h-600"]],
+    ["nano:6",     "matrix:DIN",  "orange", ["v0", "h-530"]],
+
+    ["nano:A4",    "rtc:SDA",     "green",  ["h30"]],
+    ["nano:A5",    "rtc:SCL",     "yellow", ["h50"]],
+    ["nano:5V",    "rtc:VCC",     "red",    ["v0",   "h400"]],
+    ["nano:GND.1", "rtc:GND",     "black",  ["v10",  "h400"]],
+
+    ["nano:A4",    "bmp280:SDA",  "green",  ["h30"]],
+    ["nano:A5",    "bmp280:SCL",  "yellow", ["h50"]],
+    ["nano:5V",    "bmp280:VCC",  "red",    ["v-130", "h400"]],
+    ["nano:GND.1", "bmp280:GND",  "black",  ["v-110", "h420"]],
+
+    ["nano:2",     "btn_mode:1.l","purple", ["v150", "h-220"]],
+    ["nano:GND.1", "btn_mode:2.l","black",  ["v170", "h-240"]],
+
+    ["nano:3",     "btn_up:1.l",  "purple", ["v130", "h-120"]],
+    ["nano:GND.1", "btn_up:2.l",  "black",  ["v150", "h-140"]],
+
+    ["nano:4",     "btn_down:1.l","purple", ["v110", "h-20"]],
+    ["nano:GND.1", "btn_down:2.l","black",  ["v130", "h-40"]]
+
+  ],
+
+  "dependencies": {}
+}
