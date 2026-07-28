@@ -4,19 +4,71 @@
  */
 
 #include "display_manager.h"
-#include "font5x7.h"
+#include "font3x5.h"
 #include <Arduino.h>
 
 // ---------------------------------------------------------------------------
 // Static member definitions
 // ---------------------------------------------------------------------------
 CRGB DisplayManager::_leds[NUM_LEDS];
-uint8_t DisplayManager::_brightness = DEFAULT_BRIGHTNESS;
+uint8_t DisplayManager::_brightness = MIN_BRIGHTNESS;
 
 // Predefined brightness steps (low → high)
-const uint8_t DisplayManager::BRIGHTNESS_STEPS[] = { 5, 15, 30, 60, 100, 150, 200 };
+const uint8_t DisplayManager::BRIGHTNESS_STEPS[] = { 2, 5, 10, 20, 35, 50, 60 };
 const uint8_t DisplayManager::NUM_BRIGHTNESS_STEPS =
     sizeof(BRIGHTNESS_STEPS) / sizeof(BRIGHTNESS_STEPS[0]);
+
+static const uint32_t PROGMEM FONT_PALETTE[16] = {
+    0xFFFFFF, 0xFF2020, 0xFF6000, 0xFF9800,
+    0xFFE000, 0x90FF00, 0x20FF20, 0x00FF90,
+    0x00FFFF, 0x0090FF, 0x2040FF, 0x7020FF,
+    0xB020FF, 0xFF20FF, 0xFF2080, 0xFFD0A0
+};
+
+// Native RGB888 artwork. The unused columns are transparent black so every
+// icon can share one 8x8 table and be copied directly into FastLED CRGB.
+static const uint32_t PROGMEM ENVIRONMENTAL_ICONS[3][8][8] = {
+    {
+        {0x000000, 0xFFFBFF, 0xF7F7FF, 0xEFEFFF, 0x000000, 0, 0, 0},
+        {0x000000, 0xEFEFFF, 0x000000, 0xD6DBEF, 0x000000, 0, 0, 0},
+        {0x000000, 0xEFEFFF, 0xFFA25A, 0xD6DBEF, 0x000000, 0, 0, 0},
+        {0x000000, 0xF7F7FF, 0xFF7942, 0xD6DBEF, 0x000000, 0, 0, 0},
+        {0x000000, 0xF7F7FF, 0xFF5539, 0xD6DBEF, 0x000000, 0, 0, 0},
+        {0xFFFBFF, 0xFF6D42, 0xFF4931, 0xDE2821, 0xD6DBEF, 0, 0, 0},
+        {0xEFEFFF, 0xFF8252, 0xEF3429, 0xFF5D42, 0xEFEFFF, 0, 0, 0},
+        {0x000000, 0xEFEFFF, 0xF7F7FF, 0xD6DBEF, 0x000000, 0, 0, 0}
+    },
+    {
+        {0x000000, 0x000000, 0xEFEBFF, 0x000000, 0x000000, 0, 0, 0},
+        {0x000000, 0xFFFFFF, 0xE7E7FF, 0xC6C7FF, 0x000000, 0, 0, 0},
+        {0xFFFFFF, 0xEFEBFF, 0xE7E7FF, 0xC6C7FF, 0xADAAFF, 0, 0, 0},
+        {0xEFEBFF, 0xE7E7FF, 0xE7E7FF, 0xADAAFF, 0xADAAFF, 0, 0, 0},
+        {0xEFEBFF, 0xC6C7FF, 0xC6C7FF, 0xADAAFF, 0x7B7DCE, 0, 0, 0},
+        {0x000000, 0xADAAFF, 0xADAAFF, 0x7B7DCE, 0x000000, 0, 0, 0},
+        {0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0},
+        {0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0}
+    },
+    {
+        {0xFFC06A, 0xFFA552, 0xFF8A3D, 0xE53935, 0xC62828, 0, 0, 0},
+        {0xFFC06A, 0xFF9A45, 0xF4511E, 0xC62828, 0x000000, 0, 0, 0},
+        {0xFF8A3D, 0xF4511E, 0xC62828, 0x000000, 0x006DCE, 0, 0, 0},
+        {0xE53935, 0xB71C1C, 0x000000, 0x006BCC, 0x007EE5, 0, 0, 0},
+        {0xC62828, 0x000000, 0x006ECD, 0x0088EC, 0x68E5FC, 0, 0, 0},
+        {0x000000, 0x006DCE, 0x0089ED, 0x63E3FC, 0x7BEBFD, 0, 0, 0},
+        {0x006ED0, 0x0081E7, 0x59E1FB, 0x73EAFD, 0x7BECFD, 0, 0, 0},
+        {0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0}
+    }
+};
+
+uint8_t DisplayManager::_paletteIndex = 0;
+CRGB DisplayManager::_colorFrom = CRGB::White;
+uint32_t DisplayManager::_colorTransitionStart = 0;
+uint8_t DisplayManager::_pullDownFrame[NUM_LEDS];
+
+static CRGB paletteColor(uint8_t index)
+{
+    return CRGB(pgm_read_dword(&FONT_PALETTE[index & 0x0f]));
+}
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -24,7 +76,13 @@ const uint8_t DisplayManager::NUM_BRIGHTNESS_STEPS =
 void DisplayManager::init()
 {
     FastLED.addLeds<LED_TYPE, LED_DATA_PIN, COLOR_ORDER>(_leds, NUM_LEDS)
-           .setCorrection(TypicalLEDStrip);
+           .setCorrection(UncorrectedColor);
+    FastLED.setDither(DISABLE_DITHER);
+    setBrightnessLevel(DEFAULT_BRIGHTNESS_LEVEL);
+#ifndef WOKWI_SIMULATION
+    FastLED.setMaxPowerInVoltsAndMilliamps(LED_SUPPLY_VOLTS,
+                                           LED_MAX_MILLIAMPS);
+#endif
     FastLED.setBrightness(_brightness);
     clear();
     FastLED.show();
@@ -37,6 +95,7 @@ void DisplayManager::init()
 void DisplayManager::render()
 {
     FastLED.show();
+    delayMicroseconds(300);
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +110,42 @@ void DisplayManager::setBrightness(uint8_t brightness)
 uint8_t DisplayManager::getBrightness()
 {
     return _brightness;
+}
+
+void DisplayManager::setBrightnessLevel(uint8_t level)
+{
+    level = constrain(level, 1, 10);
+    const uint16_t range = MAX_BRIGHTNESS - MIN_BRIGHTNESS;
+    setBrightness(MIN_BRIGHTNESS +
+                  static_cast<uint8_t>(((level - 1) * range + 4) / 9));
+}
+
+uint8_t DisplayManager::getBrightnessLevel()
+{
+    const uint16_t range = MAX_BRIGHTNESS - MIN_BRIGHTNESS;
+    if (range == 0)
+        return 1;
+    return 1 + static_cast<uint8_t>(
+        ((_brightness - MIN_BRIGHTNESS) * 9UL + range / 2) / range);
+}
+
+CRGB DisplayManager::fontColor()
+{
+    const uint16_t durationMs = 350;
+    uint32_t elapsed = millis() - _colorTransitionStart;
+    CRGB target = paletteColor(_paletteIndex);
+    if (elapsed >= durationMs)
+        return target;
+
+    uint8_t amount = static_cast<uint8_t>((elapsed * 255UL) / durationMs);
+    return blend(_colorFrom, target, amount);
+}
+
+void DisplayManager::cycleFontColor()
+{
+    _colorFrom = fontColor();
+    _paletteIndex = (_paletteIndex + 1) & 0x0f;
+    _colorTransitionStart = millis();
 }
 
 void DisplayManager::brightnessUp()
@@ -89,10 +184,9 @@ void DisplayManager::brightnessDown()
 /**
  * @brief  Convert (x, y) matrix coordinates to LED strip index.
  *
- * @details Assumes a serpentine layout where:
- *          - Column 0 is the LEFT column.
- *          - Even columns are wired top-to-bottom (y=0 at top).
- *          - Odd  columns are wired bottom-to-top.
+ * @details The physical layout starts with LED 0 at bottom-right. The chain
+ *          ascends the rightmost column, moves one column left and descends,
+ *          then continues right-to-left in a vertical serpentine.
  *
  *          Adjust this function if your matrix has a different wiring order.
  *          Common alternatives:
@@ -112,10 +206,11 @@ int16_t DisplayManager::xyToIndex(int16_t x, int16_t y)
     else
         return y * MATRIX_WIDTH + (MATRIX_WIDTH - 1 - x);
 #else // MATRIX_LAYOUT_SERPENTINE_COLUMN_MAJOR
-    if (x % 2 == 0)
-        return x * MATRIX_HEIGHT + y;                        // top → bottom
-    else
-        return x * MATRIX_HEIGHT + (MATRIX_HEIGHT - 1 - y); // bottom → top
+    const uint8_t physicalColumn = MATRIX_WIDTH - 1 - x;
+    if ((physicalColumn & 1U) == 0U)
+        return physicalColumn * MATRIX_HEIGHT +
+               (MATRIX_HEIGHT - 1 - y); // bottom → top
+    return physicalColumn * MATRIX_HEIGHT + y; // top → bottom
 #endif
 }
 
@@ -142,23 +237,19 @@ void DisplayManager::fill(CRGB color)
 
 int8_t DisplayManager::drawChar(int16_t x, int16_t y, char c, CRGB color)
 {
-    if (c < FONT_FIRST_CHAR || c > FONT_LAST_CHAR)
-        c = '?';
-
-    const uint8_t* glyph = Font5x7::getGlyph(c);
-
-    for (uint8_t col = 0; col < FONT_WIDTH; col++)
+    const uint8_t* glyph = Font3x5::getGlyph(c);
+    for (uint8_t row = 0; row < FONT_HEIGHT; row++)
     {
-        uint8_t colData = glyph[col];
-        for (uint8_t row = 0; row < FONT_HEIGHT; row++)
+        uint8_t rowData = glyph ? pgm_read_byte(&glyph[row]) : 0;
+        for (uint8_t col = 0; col < FONT_WIDTH; col++)
         {
-            if (colData & (1 << row))
+            if (rowData & (1 << (FONT_WIDTH - 1 - col)))
                 setPixel(x + col, y + row, color);
             else
                 setPixel(x + col, y + row, CRGB::Black);
         }
     }
-    return FONT_WIDTH + 1; // glyph width + 1 pixel spacing
+    return FONT_ADVANCE;
 }
 
 int16_t DisplayManager::drawString(int16_t x, int16_t y, const char* str, CRGB color)
@@ -171,12 +262,28 @@ int16_t DisplayManager::drawString(int16_t x, int16_t y, const char* str, CRGB c
     return cursor - x;
 }
 
+void DisplayManager::drawEnvironmentalIcon(EnvironmentalIcon icon)
+{
+    uint8_t iconIndex = static_cast<uint8_t>(icon);
+    if (iconIndex > static_cast<uint8_t>(EnvironmentalIcon::PRESSURE))
+        iconIndex = 0;
+    for (uint8_t y = 0; y < 8; y++)
+    {
+        for (uint8_t x = 0; x < 8; x++)
+        {
+            uint32_t rgb888 =
+                pgm_read_dword(&ENVIRONMENTAL_ICONS[iconIndex][y][x]);
+            setPixel(x, y, CRGB(rgb888));
+        }
+    }
+}
+
 void DisplayManager::scrollText(const char* str, CRGB color, uint16_t delay_ms)
 {
     // Calculate total pixel width of the string
     int16_t totalWidth = 0;
     const char* p = str;
-    while (*p) { totalWidth += FONT_WIDTH + 1; p++; }
+    while (*p) { totalWidth += FONT_ADVANCE; p++; }
 
     int16_t startX = MATRIX_WIDTH;
     int16_t endX   = -totalWidth;
@@ -197,22 +304,29 @@ void DisplayManager::scrollText(const char* str, CRGB color, uint16_t delay_ms)
 void DisplayManager::playBootAnimation()
 {
 #ifdef FEATURE_BOOT_ANIMATION
-    // Simple sweep: fill columns left to right with a rainbow, then fade out
-    for (uint8_t col = 0; col < MATRIX_WIDTH; col++)
+    // Render the complete rainbow on every frame. Hue advances by only two
+    // 8-bit steps between frames, while brightness fades in and out smoothly.
+    const uint8_t frameCount = 80;
+    const uint8_t fadeFrames = 20;
+    for (uint8_t frame = 0; frame < frameCount; frame++)
     {
-        CRGB c = CHSV(col * 8, 255, 200);
-        for (uint8_t row = 0; row < MATRIX_HEIGHT; row++)
-            setPixel(col, row, c);
+        uint8_t value = 255;
+        if (frame < fadeFrames)
+            value = static_cast<uint8_t>((frame * 255U) / fadeFrames);
+        else if (frame >= frameCount - fadeFrames)
+            value = static_cast<uint8_t>(
+                ((frameCount - 1U - frame) * 255U) / fadeFrames);
+
+        for (uint8_t x = 0; x < MATRIX_WIDTH; x++)
+        {
+            uint8_t hue = static_cast<uint8_t>(
+                (static_cast<uint16_t>(x) * 255U) /
+                (MATRIX_WIDTH - 1U) + frame * 2U);
+            for (uint8_t y = 0; y < MATRIX_HEIGHT; y++)
+                setPixel(x, y, CHSV(hue, 255, value));
+        }
         render();
-        delay(20);
-    }
-    delay(300);
-    // Fade out
-    for (uint8_t i = 0; i < 10; i++)
-    {
-        fadeToBlackBy(_leds, NUM_LEDS, 30);
-        render();
-        delay(30);
+        delay(18);
     }
     clear();
     render();
@@ -230,23 +344,54 @@ void DisplayManager::playTransition()
     clear();
 }
 
+void DisplayManager::capturePullDownFrame()
+{
+    // RGB332 keeps the saved frame to 256 bytes instead of the 768 bytes a
+    // second CRGB framebuffer would require on the ATmega328P.
+    for (uint16_t i = 0; i < NUM_LEDS; i++)
+    {
+        const CRGB& pixel = _leds[i];
+        _pullDownFrame[i] = (pixel.r & 0xe0) |
+                            ((pixel.g >> 3) & 0x1c) |
+                            (pixel.b >> 6);
+    }
+}
+
+void DisplayManager::composePullDownFrame(uint8_t progress)
+{
+    if (progress > MATRIX_HEIGHT)
+        progress = MATRIX_HEIGHT;
+
+    // The incoming screen is already rendered normally in _leds. Move its
+    // bottom 'progress' rows into view from above.
+    for (uint8_t y = 0; y < progress; y++)
+    {
+        uint8_t sourceY = MATRIX_HEIGHT - progress + y;
+        for (uint8_t x = 0; x < MATRIX_WIDTH; x++)
+            _leds[xyToIndex(x, y)] = _leds[xyToIndex(x, sourceY)];
+    }
+
+    // Place the saved outgoing frame below it, displaced by the same amount.
+    for (uint8_t y = progress; y < MATRIX_HEIGHT; y++)
+    {
+        uint8_t sourceY = y - progress;
+        for (uint8_t x = 0; x < MATRIX_WIDTH; x++)
+        {
+            uint8_t packed = _pullDownFrame[xyToIndex(x, sourceY)];
+            CRGB restored((packed & 0xe0) | ((packed & 0xe0) >> 3) |
+                          ((packed & 0xe0) >> 6),
+                          ((packed & 0x1c) << 3) | (packed & 0x1c) |
+                          ((packed & 0x1c) >> 3),
+                          ((packed & 0x03) << 6) | ((packed & 0x03) << 4) |
+                          ((packed & 0x03) << 2) | (packed & 0x03));
+            _leds[xyToIndex(x, y)] = restored;
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Custom Calendar & Clock UI (matching reference photo)
 // ---------------------------------------------------------------------------
-
-// 3x5 compact digits for calendar day rendering (0-9)
-static const uint8_t PROGMEM DIGITS_3X5[10][5] = {
-    { 0b111, 0b101, 0b101, 0b101, 0b111 }, // 0
-    { 0b010, 0b110, 0b010, 0b010, 0b111 }, // 1
-    { 0b111, 0b001, 0b111, 0b100, 0b111 }, // 2
-    { 0b111, 0b001, 0b111, 0b001, 0b111 }, // 3
-    { 0b101, 0b101, 0b111, 0b001, 0b001 }, // 4
-    { 0b111, 0b100, 0b111, 0b001, 0b111 }, // 5
-    { 0b111, 0b100, 0b111, 0b101, 0b111 }, // 6
-    { 0b111, 0b001, 0b010, 0b010, 0b010 }, // 7
-    { 0b111, 0b101, 0b111, 0b101, 0b111 }, // 8
-    { 0b111, 0b101, 0b111, 0b001, 0b111 }  // 9
-};
 
 void DisplayManager::drawCalendarPage(uint8_t day)
 {
@@ -274,98 +419,41 @@ void DisplayManager::drawCalendarPage(uint8_t day)
     // Draw day digit in black on the white body (Rows 2..6)
     if (day < 10)
     {
-        // Single digit centered at x=2 (cols 2..4)
+        // Single digit centered at x=3 (cols 3..5), with 3 empty columns
+        // on either side of the 9-column calendar tile.
         uint8_t d = day;
         for (uint8_t r = 0; r < 5; r++)
         {
-            uint8_t rowBits = pgm_read_byte(&DIGITS_3X5[d][r]);
+            const uint8_t* glyph = Font3x5::getGlyph('0' + d);
+            uint8_t rowBits = pgm_read_byte(&glyph[r]);
             for (uint8_t c = 0; c < 3; c++)
             {
                 if (rowBits & (1 << (2 - c)))
                 {
-                    setPixel(2 + c, 2 + r, CRGB::Black);
+                    setPixel(3 + c, 2 + r, CRGB::Black);
                 }
             }
         }
     }
     else
     {
-        // Double digit: d1 at x=1 (cols 1..3), d2 at x=4 (cols 4..6)
+        // Double digit: use the 7 central columns (1..7). Column 4 is the
+        // separator and columns 0 and 8 remain empty margins.
         uint8_t d1 = day / 10;
         uint8_t d2 = day % 10;
         for (uint8_t r = 0; r < 5; r++)
         {
-            uint8_t b1 = pgm_read_byte(&DIGITS_3X5[d1][r]);
-            uint8_t b2 = pgm_read_byte(&DIGITS_3X5[d2][r]);
+            const uint8_t* glyph1 = Font3x5::getGlyph('0' + d1);
+            const uint8_t* glyph2 = Font3x5::getGlyph('0' + d2);
+            uint8_t b1 = pgm_read_byte(&glyph1[r]);
+            uint8_t b2 = pgm_read_byte(&glyph2[r]);
             for (uint8_t c = 0; c < 3; c++)
             {
                 if (b1 & (1 << (2 - c))) setPixel(1 + c, 2 + r, CRGB::Black);
-                if (b2 & (1 << (2 - c))) setPixel(4 + c, 2 + r, CRGB::Black);
+                if (b2 & (1 << (2 - c))) setPixel(5 + c, 2 + r, CRGB::Black);
             }
         }
     }
-}
-
-// 4x7 bold digits (rows 0..6, 4 bits wide MSB left)
-static const uint8_t PROGMEM DIGITS_4X7[10][7] = {
-    { 0b1111, 0b1001, 0b1001, 0b1001, 0b1001, 0b1001, 0b1111 }, // 0
-    { 0b0111, 0b0010, 0b0010, 0b0010, 0b0010, 0b0010, 0b0111 }, // 1
-    { 0b1111, 0b0001, 0b0001, 0b1111, 0b1000, 0b1000, 0b1111 }, // 2
-    { 0b1111, 0b0001, 0b0001, 0b1111, 0b0001, 0b0001, 0b1111 }, // 3
-    { 0b1001, 0b1001, 0b1001, 0b1111, 0b0001, 0b0001, 0b0001 }, // 4
-    { 0b1111, 0b1000, 0b1000, 0b1111, 0b0001, 0b0001, 0b1111 }, // 5
-    { 0b1111, 0b1000, 0b1000, 0b1111, 0b1001, 0b1001, 0b1111 }, // 6
-    { 0b1111, 0b0001, 0b0001, 0b0001, 0b0001, 0b0001, 0b0001 }, // 7
-    { 0b1111, 0b1001, 0b1001, 0b1111, 0b1001, 0b1001, 0b1111 }, // 8
-    { 0b1111, 0b1001, 0b1001, 0b1111, 0b0001, 0b0001, 0b1111 }  // 9
-};
-
-uint8_t DisplayManager::drawCustom4x7Digit(int16_t x, int16_t y, char c, CRGB color)
-{
-    if (c == ':')
-    {
-        // 2x2 dot colon (Row 1..2 and Row 4..5)
-        setPixel(x, y + 1, color); setPixel(x + 1, y + 1, color);
-        setPixel(x, y + 2, color); setPixel(x + 1, y + 2, color);
-
-        setPixel(x, y + 4, color); setPixel(x + 1, y + 4, color);
-        setPixel(x, y + 5, color); setPixel(x + 1, y + 5, color);
-        return 2;
-    }
-
-    if (c < '0' || c > '9') return 0;
-    uint8_t d = c - '0';
-
-    if (d == 1)
-    {
-        // 3px wide digit 1
-        for (uint8_t r = 0; r < 7; r++)
-        {
-            uint8_t rowBits = pgm_read_byte(&DIGITS_4X7[1][r]);
-            for (uint8_t col = 0; col < 3; col++)
-            {
-                if (rowBits & (1 << (2 - col)))
-                {
-                    setPixel(x + col, y + r, color);
-                }
-            }
-        }
-        return 3;
-    }
-
-    // Standard 4px wide digit
-    for (uint8_t r = 0; r < 7; r++)
-    {
-        uint8_t rowBits = pgm_read_byte(&DIGITS_4X7[d][r]);
-        for (uint8_t col = 0; col < 4; col++)
-        {
-            if (rowBits & (1 << (3 - col)))
-            {
-                setPixel(x + col, y + r, color);
-            }
-        }
-    }
-    return 4;
 }
 
 void DisplayManager::drawClockScreen(uint8_t day, uint8_t dayOfWeek, uint8_t hour, uint8_t minute, bool colonVisible)
@@ -375,36 +463,27 @@ void DisplayManager::drawClockScreen(uint8_t day, uint8_t dayOfWeek, uint8_t hou
     // 1. Draw 9x8 calendar tile (cols 0..8)
     drawCalendarPage(day);
 
-    // 2. Draw HH:MM (cols 8..31, rows 0..6)
+    // 2. Draw HH:MM with the shared 3x5 numeric font, vertically centered.
     char buf[6];
     snprintf(buf, sizeof(buf), "%02u%c%02u", hour, colonVisible ? ':' : ' ', minute);
 
-    int16_t cursorX = 9;
-    for (uint8_t i = 0; i < 5; i++)
-    {
-        char ch = buf[i];
-        if (ch == ' ')
-        {
-            cursorX += 2; // Blank colon gap
-        }
-        else
-        {
-            uint8_t w = drawCustom4x7Digit(cursorX, 0, ch, CRGB::White);
-            cursorX += w;
-        }
-        cursorX += 1; // 1px spacing between digits
-    }
+    CRGB textColor = fontColor();
+    drawChar(11, 1, buf[0], textColor);
+    drawChar(15, 1, buf[1], textColor);
+    drawChar(19, 1, buf[2], textColor);
+    drawChar(23, 1, buf[3], textColor);
+    drawChar(27, 1, buf[4], textColor);
 
-    // 3. Draw 7-segment Day of Week Bar on Row 7 (cols 8..31)
-    // 7 segments of 2 pixels wide with 1-pixel gap (cols 9..28)
+    // 3. Draw 7-segment Day of Week Bar on Row 7.
+    // 7 segments of 2 pixels wide with 1-pixel gaps (cols 10..29).
     // RTClib dayOfTheWeek: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
     // Mon-first index: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
     uint8_t activeSeg = (dayOfWeek == 0) ? 6 : (dayOfWeek - 1);
 
     for (uint8_t s = 0; s < 7; s++)
     {
-        uint8_t startCol = 9 + s * 3;
-        CRGB color = (s == activeSeg) ? CRGB::White : CRGB(40, 40, 45); // Active = White, Inactive = Dark Gray
+        uint8_t startCol = 10 + s * 3;
+        CRGB color = (s == activeSeg) ? textColor : CRGB(40, 40, 45);
         setPixel(startCol, 7, color);
         setPixel(startCol + 1, 7, color);
     }
