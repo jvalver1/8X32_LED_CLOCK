@@ -68,9 +68,15 @@ public:
     // Setters (write to RTC via I²C)
     // -----------------------------------------------------------------------
 
-    static void setTime(uint8_t hour, uint8_t minute, uint8_t second);
-    static void setDate(uint8_t day, uint8_t month, uint16_t year);
-    static void setDateTime(uint16_t year, uint8_t month, uint8_t day,
+    static bool setTime(uint8_t hour, uint8_t minute, uint8_t second);
+    static bool setDate(uint8_t day, uint8_t month, uint16_t year);
+
+    /**
+     * Store user-entered local civil time. When DST is active for the entered
+     * date, one hour is subtracted before writing standard time to the RTC.
+     * Returns true when an immediate read-back matches the requested value.
+     */
+    static bool setDateTime(uint16_t year, uint8_t month, uint8_t day,
                             uint8_t hour, uint8_t minute, uint8_t second);
     static bool calculateEuropeanDst(uint16_t year, uint8_t month, uint8_t day);
 

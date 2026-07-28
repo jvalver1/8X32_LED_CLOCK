@@ -47,14 +47,14 @@
  * Brightness limits on FastLED's 0-255 scale.
  *
  * At the conservative WS2812B worst case of 60 mA per pixel, 256 pixels can
- * demand 15.36 A. A ceiling of 58 limits the LEDs to about 3.5 A, leaving
- * 0.5 A headroom on a regulated 5 V / 4 A source.
+ * demand 15.36 A. The manual brightness ceiling is 64 because normal clock
+ * screens illuminate only part of the 8x32 matrix at once.
  */
 #ifndef DEFAULT_BRIGHTNESS_LEVEL
-  #define DEFAULT_BRIGHTNESS_LEVEL 5
+  #define DEFAULT_BRIGHTNESS_LEVEL 9
 #endif
 #ifndef MAX_BRIGHTNESS
-  #define MAX_BRIGHTNESS       58
+  #define MAX_BRIGHTNESS       64
 #endif
 #ifndef MIN_BRIGHTNESS
   #define MIN_BRIGHTNESS       2
@@ -69,8 +69,8 @@
   #define LED_SUPPLY_VOLTS       5
 #endif
 #ifndef LED_MAX_MILLIAMPS
-  // Leaves 0.5 A for control electronics, conversion losses, and margin.
-  #define LED_MAX_MILLIAMPS    3500
+  // Match this estimated LED ceiling to the finished clock's power system.
+  #define LED_MAX_MILLIAMPS    4000
 #endif
 
 // ============================================================
@@ -170,14 +170,6 @@ enum class DisplayMode : uint8_t
 // ============================================================
 // Feature Flags
 // ============================================================
-/**
- * Display the RTC time with a one-hour daylight-saving offset.
- * Set to 1 while DST is active, or 0 for standard time.
- */
-#ifndef DST_ACTIVE
-  #define DST_ACTIVE 0
-#endif
-
 /**
  * Clock display format: 0 = 24-hour (default), 1 = 12-hour.
  * This changes presentation only; the RTC always stores 24-hour time.

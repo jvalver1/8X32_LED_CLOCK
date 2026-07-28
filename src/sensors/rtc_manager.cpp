@@ -69,10 +69,19 @@ void RtcManager::update()
 {
     if (!_valid) return;
 
-    DateTime now = _rtc.now();
-    _cachedTime  = { now.hour(), now.minute(), now.second() };
-    _cachedDate  = { now.day(), now.month(), now.year(), now.dayOfTheWeek() };
-    _dstActive   = calculateEuropeanDst(now.year(), now.month(), now.day());
+    // The DS3231 is authoritative and always stores standard time. DST is
+    // recalculated on every poll, so a new day and its transition are applied
+    // as soon as the RTC date changes.
+    DateTime standardTime = _rtc.now();
+    _dstActive = calculateEuropeanDst(standardTime.year(),
+                                      standardTime.month(),
+                                      standardTime.day());
+    DateTime localTime = _dstActive
+                             ? standardTime + TimeSpan(0, 1, 0, 0)
+                             : standardTime;
+    _cachedTime = { localTime.hour(), localTime.minute(), localTime.second() };
+    _cachedDate = { localTime.day(), localTime.month(), localTime.year(),
+                    localTime.dayOfTheWeek() };
 }
 
 // ---------------------------------------------------------------------------
@@ -94,28 +103,43 @@ bool RtcManager::calculateEuropeanDst(uint16_t year, uint8_t month, uint8_t day)
 // ---------------------------------------------------------------------------
 // Setters
 // ---------------------------------------------------------------------------
-void RtcManager::setTime(uint8_t hour, uint8_t minute, uint8_t second)
+bool RtcManager::setTime(uint8_t hour, uint8_t minute, uint8_t second)
 {
-    if (!_valid) return;
-    DateTime current = _rtc.now();
-    _rtc.adjust(DateTime(current.year(), current.month(), current.day(),
-                         hour, minute, second));
-    update();
+    if (!_valid) return false;
+    return setDateTime(_cachedDate.year, _cachedDate.month, _cachedDate.day,
+                       hour, minute, second);
 }
 
-void RtcManager::setDate(uint8_t day, uint8_t month, uint16_t year)
+bool RtcManager::setDate(uint8_t day, uint8_t month, uint16_t year)
 {
-    if (!_valid) return;
-    DateTime current = _rtc.now();
-    _rtc.adjust(DateTime(year, month, day,
-                         current.hour(), current.minute(), current.second()));
-    update();
+    if (!_valid) return false;
+    return setDateTime(year, month, day, _cachedTime.hour,
+                       _cachedTime.minute, _cachedTime.second);
 }
 
-void RtcManager::setDateTime(uint16_t year, uint8_t month, uint8_t day,
+bool RtcManager::setDateTime(uint16_t year, uint8_t month, uint8_t day,
                              uint8_t hour, uint8_t minute, uint8_t second)
 {
-    if (!_valid) return;
-    _rtc.adjust(DateTime(year, month, day, hour, minute, second));
+    if (!_valid) return false;
+
+    DateTime localTime(year, month, day, hour, minute, second);
+    bool enteredTimeIsDst = calculateEuropeanDst(year, month, day);
+    DateTime standardTime = enteredTimeIsDst
+                                ? localTime - TimeSpan(0, 1, 0, 0)
+                                : localTime;
+    _rtc.adjust(standardTime);
+
+    // RTClib adjust() has no status result, so verify the hardware registers
+    // immediately by reading the stored fields back.
+    DateTime stored = _rtc.now();
+    uint32_t storedSeconds = stored.unixtime();
+    uint32_t expectedSeconds = standardTime.unixtime();
+    bool written = storedSeconds == expectedSeconds ||
+                   storedSeconds == expectedSeconds + 1;
+#ifdef ENABLE_DEBUG_SERIAL
+    Serial.println(written ? F("[RTC] Date/time write verified.")
+                           : F("[RTC] ERROR: Date/time write verification failed."));
+#endif
     update();
+    return written;
 }

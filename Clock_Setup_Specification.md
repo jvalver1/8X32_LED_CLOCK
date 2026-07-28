@@ -6,7 +6,8 @@ This document outlines the operational logic and state machine for a digital clo
 ### 1.1 Hardware Components
 *   **Microcontroller (MCU):** The core processor handling state logic and GPIO.
 *   **LED Screen:** Display unit capable of rendering time/date and flashing specific digit fields.
-*   **RTC Module:** Real-Time Clock maintaining the time, date, and Daylight Saving Time (DST) flag.
+*   **RTC Module:** Real-Time Clock maintaining standard time and date. The
+    firmware calculates DST; the DS3231 does not store an application DST flag.
 *   **Buttons (Active Low or High, to be debounced in software):**
     *   `BTN_SETUP`: Used for entering, navigating, and exiting the setup mode.
     *   `BTN_UP`: Increments the currently selected field.
@@ -83,15 +84,27 @@ Whenever the FSM transitions back to `STATE_IDLE` (via completion, long press, o
 
 ### 5.1 Exit_And_Save() Implementation Steps:
 1.  **Stop Flashing:** Send command to LED screen to stop flashing digits.
-2.  **Calculate DST:** Call the DST calculation function based on the newly set date (See Section 6).
-3.  **Update RTC:** Write the temporary time/date buffer and the calculated DST flag to the RTC module hardware registers.
-4.  **Update Display:** Force an immediate refresh of the LED screen to show the new time/date in non-flashing mode.
+2.  **Interpret Input as Local Time:** The time entered by the user already
+    includes any active daylight-saving adjustment.
+3.  **Calculate DST:** Calculate DST from the newly entered local date (See
+    Section 6).
+4.  **Convert for RTC Storage:** The DS3231 stores standard time. If DST is
+    active, subtract one hour from the complete local date/time before writing
+    it, including a rollover into the preceding day when required. Do not store
+    a DST flag in the DS3231; it has no such application register.
+5.  **Verify RTC Write:** Read the RTC back immediately. The stored standard
+    time must equal the converted value, allowing one elapsed second.
+6.  **Update Display:** Refresh the RTC cache immediately and show the new local
+    time/date in non-flashing mode.
 
 ---
 
 ## 6. Business Logic: European DST Calculation
 
-The DST flag must be dynamically calculated upon exiting the setup mode. The European Union DST rules are:
+The DST state must be calculated when setup is saved and recalculated whenever
+the RTC cache is refreshed. The RTC is polled once per second, so this
+guarantees recalculation when its date advances at `00:00`. The current
+firmware applies the following date-granularity European DST rules:
 *   **Start:** Last Sunday of March at 01:00 UTC (Clocks go forward).
 *   **End:** Last Sunday of October at 01:00 UTC (Clocks go back).
 
@@ -106,7 +119,11 @@ To determine if a given `Date (Day, Month, Year)` falls within the DST period:
     *   Calculate the date of the last Sunday in October for the given `Year`.
     *   If `Day < Last Sunday`: **DST is ON**. Else: **DST is OFF**.
 
-*(Note: If precision down to the exact hour of the switch is required, include the temporary buffer's `Hour` field in the edge-case day comparison).*
+With this date-granularity policy, the offset changes when the RTC enters the
+transition date at `00:00` standard time. If exact statutory `01:00 UTC`
+switching is required later, the calculation must also include the hour.
 
 ### 6.2 Display considerations for DST
-If the UI requires an indicator for DST, ensure the display rendering logic queries the newly updated RTC DST flag to toggle the UI element accordingly.
+The RTC manager exposes a local civil-time cache to the application. Display
+and setup code must use that cache directly and must not add a second DST
+offset. `isDstActive()` may be used for a future on-screen DST indicator.

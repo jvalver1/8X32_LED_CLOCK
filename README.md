@@ -1,13 +1,46 @@
 # 8x32 WS2812B LED Clock
 
-An Arduino Pro Mini desk clock for a 256-pixel WS2812B matrix. It keeps time with a battery-backed DS3231 RTC, reads temperature, humidity, and atmospheric pressure from a BME280, and provides three-button control for changing screens, font colour, time, date, clock format, brightness, and automatic carousel timing. A complete Arduino Nano-based Wokwi simulation is included.
+<p align="center">
+  <img src="./Clock.jpg.jpeg" alt="Completed 8x32 WS2812B LED clock" width="720">
+</p>
+
+## A tiny clock with a lot going on
+
+This project turns an 8x32 WS2812B RGB LED matrix into a compact, colourful
+desktop clock that is useful at a glance and fun to interact with. Behind its
+simple clock face is a complete miniature information display: a calendar,
+weekday marker, temperature, humidity, atmospheric pressure, selectable
+colours, adjustable brightness, smooth transitions, and an automatic screen
+carousel.
+
+The clock is built around an Arduino Pro Mini and deliberately keeps the user
+interface physical and immediate. There is no phone application, account, or
+network connection to configure. Three buttons provide access to every feature,
+while a battery-backed DS3231 keeps time when the main supply is disconnected.
+A BME280 adds live environmental readings, and the 256 individually
+addressable LEDs give each screen its own bright, distinctive character.
+
+Timekeeping is designed around the RTC rather than a software counter. The
+DS3231 stores standard time and remains the single source of truth; the firmware
+adds the European daylight-saving offset only when creating local civil time
+for the display. When the user sets the clock, the entered value is understood
+to be the local time already visible on an ordinary clock. The firmware
+automatically removes the DST hour before saving it to the RTC, then reads the
+value back to verify the write.
+
+The repository also includes a complete Arduino Nano-based Wokwi simulation,
+custom simulated DS3231 and BME280 devices, automated display captures, and
+separate PlatformIO targets for simulation and physical hardware. This makes it
+possible to explore the interface and develop most display behaviour before
+assembling the real clock.
 
 ## Features
 
 - Custom 8x32 clock face with a calendar tile, `HH:MM`, blinking colon, and weekday indicator
 - Date, temperature, humidity, and pressure screens
 - Setup for time, date, 12/24-hour format, and brightness without recompiling
-- DS3231 battery-backed timekeeping
+- DS3231 battery-backed timekeeping with verified setup writes
+- Automatic European DST conversion between RTC standard time and local time
 - BME280 automatic address detection at `0x76` or `0x77`
 - Smooth 16-colour font palette selected with the leftmost button
 - Debounced short press, long press, and held-button repeat
@@ -18,7 +51,11 @@ An Arduino Pro Mini desk clock for a 256-pixel WS2812B matrix. It keeps time wit
 
 ## How it works
 
-`setup()` configures the three buttons and initializes the RTC, environmental sensor, FastLED display, and application state machine. The non-blocking main loop polls buttons, refreshes cached RTC and BME280 data at configured intervals, selects the current screen, draws into a 256-element FastLED buffer, and sends the frame to the matrix.
+At startup, the firmware configures the buttons and initializes the RTC,
+environmental sensor, FastLED display, and application state machine. The
+non-blocking main loop polls the controls, refreshes the RTC every second,
+updates the BME280 cache every five seconds, selects the current screen, draws
+into a 256-element FastLED buffer, and sends the completed frame to the matrix.
 
 The exception is scrolling text and short animations, which deliberately use brief delays while their frames play. The clock screen maps logical `(x,y)` pixels to the physical LED order and uses compact custom glyphs so a calendar tile and time fit in only eight rows. Normal hardware defaults to column-major serpentine wiring; Wokwi uses progressive row-major wiring.
 
@@ -33,7 +70,7 @@ The exception is scrolling text and short animations, which deliberately use bri
 | 1 | DS3231 RTC module | I2C address `0x68`; fit a compatible backup coin cell |
 | 1 | BME280 breakout | Temperature, humidity, and pressure; I2C address `0x76` or `0x77` |
 | 3 | Normally-open momentary buttons | Connected between an input and GND; firmware enables internal pull-ups |
-| 1 | Regulated 5 V / 4 A supply | Firmware reserves 0.5 A and budgets up to 3.5 A for the LEDs |
+| 1 | Regulated 5 V / 4 A supply | Match the supply and firmware current limit to the finished clock |
 | 1 | 1000 uF electrolytic capacitor | Across matrix 5 V and GND, close to the panel; observe polarity |
 | 1 | 330-470 ohm resistor | In series between Pro Mini D6 and matrix DIN, close to the matrix |
 | optional | 4.7 kohm resistors | SDA/SCL pull-ups if the breakout boards do not already provide them |
@@ -64,7 +101,14 @@ breakout boards wired with SDO high.
 
 Do not power a 256-pixel panel through the Pro Mini regulator or USB-to-serial adapter. Feed the matrix directly from a regulated 5 V supply and join that supply's ground to Pro Mini GND. Inject power at more than one point if wiring or panel voltage drop becomes visible.
 
-A WS2812B can approach 60 mA at full-brightness white, so an unconstrained 256-pixel panel has a theoretical worst case near 15.4 A. For a regulated 5 V / 4 A source, this firmware reserves 0.5 A for the controller, sensors, losses, and margin, then gives the LEDs a 3.5 A budget. The physical 1-10 scale maps to FastLED values 2-58 and starts at level 5 (value 27). FastLED also enforces an estimated 3500 mA LED ceiling. These are software safeguards, not a replacement for suitable wiring, power injection, connectors, fusing, decoupling, and verification with the actual panel and supply.
+A WS2812B can approach 60 mA at full-brightness white, so an unconstrained
+256-pixel panel has a theoretical worst case near 15.4 A. The physical 1-10
+brightness scale maps to FastLED values 2-64 and starts at level 9. FastLED also
+enforces an estimated 4000 mA ceiling. These are software safeguards, not a
+replacement for suitable wiring, power injection, connectors, fusing,
+decoupling, and verification with the actual panel and supply. Reduce
+`LED_MAX_MILLIAMPS` if the controller and LEDs share a supply that cannot
+provide additional margin.
 
 Many BME280 breakouts contain a 3.3 V regulator and level shifting and accept 5 V; a bare BME280 does not. Verify the markings and datasheet for your particular module. Likewise, confirm whether the RTC and sensor boards already include I2C pull-ups. DS3231 modules vary in their coin-cell charging circuit: never install a non-rechargeable cell in a module that actively charges it.
 
@@ -81,14 +125,20 @@ Set `MATRIX_LAYOUT` in `src/config.h` or through a build flag if your panel is p
 
 ## Controls
 
-| Control | Action |
-|---|---|
-| Leftmost short press | Advance the font through the smooth 16-colour palette |
-| Leftmost long press | Enter setup; while setting, save immediately and return to the clock |
-| Centre short press | Cycle screens in reverse |
-| Rightmost short press | Cycle screens forward |
-| Centre / rightmost long press | Carousel off -> 5 seconds -> 7 seconds -> off |
-| Centre / rightmost in setup | Decrease / increase the selected value; hold to auto-repeat |
+All clock functions are available from three buttons:
+
+- **MODE — short press:** select the next font colour from the 16-colour
+  palette.
+- **MODE — long press:** enter setup. While in setup, a long press saves all
+  settings immediately and returns to the clock.
+- **UP — short press:** move backwards through the normal display screens.
+- **DOWN — short press:** move forwards through the normal display screens.
+- **UP or DOWN — long press:** cycle the automatic carousel through off,
+  five-second dwell, seven-second dwell, and off again.
+- **MODE — short press during setup:** accept the current field and advance to
+  the next one.
+- **UP during setup:** increase the selected value; keep holding to repeat.
+- **DOWN during setup:** decrease the selected value; keep holding to repeat.
 
 The carousel cycles through clock, temperature, humidity, and pressure; it deliberately skips the date. A bottom-right dot flashes orange for the 5-second mode and red for the 7-second mode. Entering setup disables it. Stopping the carousel leaves the currently displayed screen selected and removes the indicator.
 
@@ -102,9 +152,40 @@ Setup fields appear in this order:
 6. 12/24-hour format
 7. Brightness level from 1 to 10
 
-The leftmost short press advances to the next field. The selected field flashes, and any button activity restarts the seven-second inactivity timer. Completing the final field, holding the leftmost button, or allowing the setup timer to expire saves the buffered date/time, display format, and brightness. The seconds value is reset to zero. Day values are constrained to the selected month and year, including leap years. Brightness changes are previewed immediately while editing.
+The selected field flashes, and any button activity restarts the seven-second
+inactivity timer. Completing the final field, holding MODE, or allowing the
+setup timer to expire saves the buffered date/time, display format, and
+brightness. Every one of these setup exit paths writes the entered date and
+time to the RTC. Seconds are reset to zero. Day values are constrained to the
+selected month and year, including leap years, and brightness changes are
+previewed immediately while editing.
 
-The 1-10 brightness value is the stable user-facing setting; the firmware maps it to the target-specific FastLED range. Physical hardware uses values 2-58, while Wokwi uses 26-255 so the simulator can show colour gradients clearly. Both start at level 5.
+The 1-10 brightness value is the stable user-facing setting; the firmware maps it to the target-specific FastLED range. Physical hardware uses values 2-64, while Wokwi uses 26-255 so the simulator can show colour gradients clearly. Both start at level 9.
+
+## RTC synchronization and daylight saving time
+
+The DS3231 is the authoritative clock. The firmware does not maintain an
+independent `millis()`-based wall clock that could slowly drift away from the
+RTC. Instead, it reads the DS3231 once per second and rebuilds the cached local
+date and time used by every display screen.
+
+The RTC always stores **standard time**. The application exposes **local civil
+time**:
+
+1. During setup, the hour entered by the user is assumed to include DST already.
+2. The firmware calculates European DST from the entered local date.
+3. If DST is active, it subtracts one hour from the complete date/time before
+   writing to the RTC. This also handles crossing into the previous day.
+4. The RTC is read back immediately. A matching value, allowing for one elapsed
+   second, verifies that the setup write succeeded.
+5. On every one-second RTC poll, DST is recalculated and the local cache is
+   refreshed. This guarantees that a change of RTC day is noticed immediately.
+
+The current rule is date-based: DST is active from the last Sunday in March
+through the day before the last Sunday in October. Consequently, the offset
+changes when the RTC date enters the relevant transition day at `00:00`
+standard time. Exact statutory hour-based switching at `01:00 UTC` is not
+implemented.
 
 ## Software structure
 
@@ -123,13 +204,21 @@ The 1-10 brightness value is the stable user-facing setting; the firmware maps i
 | `scripts/build_wokwi.py` | Builds Wokwi after a normal release build, but skips it for uploads |
 | `wokwi-icons.test.yaml` | Automated simulator navigation and environmental-icon screenshots |
 
-The RTC is polled every second and the BME280 every five seconds on hardware. The BME280 runs in normal mode with x2 temperature, x16 pressure, and x1 humidity oversampling, x16 IIR filtering, and 500 ms standby. If the DS3231 reports loss of power, firmware initializes it to `2000-01-01 00:00:00`; use the buttons to set the correct value.
+The BME280 is polled every five seconds on hardware. It runs in normal mode
+with x2 temperature, x16 pressure, and x1 humidity oversampling, x16 IIR
+filtering, and 500 ms standby. If the DS3231 reports loss of power, firmware
+initializes it to `2026-01-01 00:00:00`; use the buttons to set the correct
+local value.
 
 ### Display and colour implementation
 
 FastLED owns a 256-element `CRGB` framebuffer. Environmental artwork is stored in flash as native 24-bit `0xRRGGBB` RGB888 values and copied directly into `CRGB`; there is no RGB565 conversion or reduced icon palette. Temperature and humidity use 5x8 artwork, and the pressure screen uses the current 5x8 orange/red-to-blue RGB888 icon. Unused columns in the common 8x8 icon table are transparent black.
 
-The selectable font palette contains 16 RGB888 colours. Changing font colour blends from the current colour to the next over 350 ms. Wokwi uses an uncorrected FastLED colour profile and a matrix brightness multiplier of `1`, avoiding channel saturation and preserving the RGB888 gradients.
+The selectable font palette contains 16 RGB888 colours and starts at palette
+index 8 (`#00FFFF`). Changing font colour blends from the current colour to the
+next over 350 ms. Wokwi uses an uncorrected FastLED colour profile and a matrix
+brightness multiplier of `1`, avoiding channel saturation and preserving the
+RGB888 gradients.
 
 The pull-down carousel transition saves the outgoing frame in a compact RGB332 buffer to stay within the ATmega328P's 2 KB SRAM. This temporary reduction applies only while reconstructing the outgoing portion of the transition; normal screens and icons remain RGB888.
 
@@ -193,15 +282,14 @@ Edit `src/config.h`, or override guarded values with PlatformIO `build_flags`.
 
 | Setting | Default | Purpose |
 |---|---:|---|
-| `DEFAULT_BRIGHTNESS_LEVEL` | 5 | Startup value on the user-facing 1-10 scale |
-| `MIN_BRIGHTNESS` / `MAX_BRIGHTNESS` | 2 / 58 | Manual bounds sized for a regulated 5 V / 4 A source |
-| `LED_MAX_MILLIAMPS` | 3500 | FastLED LED-current ceiling, leaving 0.5 A system headroom |
+| `DEFAULT_BRIGHTNESS_LEVEL` | 9 | Startup value on the user-facing 1-10 scale |
+| `MIN_BRIGHTNESS` / `MAX_BRIGHTNESS` | 2 / 64 | Manual bounds sized for a regulated 5 V / 4 A source |
+| `LED_MAX_MILLIAMPS` | 4000 | FastLED estimated LED-current ceiling |
 | Wokwi `MIN_BRIGHTNESS` / `MAX_BRIGHTNESS` | 26 / 255 | Simulation-only range preserving visible RGB gradients |
 | `DISPLAY_REFRESH_MS` | 33 | Intended display refresh interval |
 | `RTC_POLL_MS` | 1000 | RTC cache refresh |
 | `SENSOR_POLL_MS` | 5000 | BME280 cache refresh |
 | `CAROUSEL_SHORT_DELAY_MS` / `CAROUSEL_LONG_DELAY_MS` | 5000 / 7000 | Runtime carousel dwell times |
-| `DST_ACTIVE` | 0 | Add the one-hour DST display offset when set to 1 |
 | `CLOCK_12H_FORMAT` | 0 | Use 12-hour display when set to 1; default is 24-hour |
 | `BTN_DEBOUNCE_MS` | 50 | Button debounce |
 | `BTN_LONG_PRESS_MS` | 800 | Long-press threshold |

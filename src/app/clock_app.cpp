@@ -297,6 +297,8 @@ void ClockApp::applyConfig()
     clampConfigDay();
     _use12Hour = _cfg12Hour;
     DisplayManager::setBrightnessLevel(_cfgBrightness);
+    // Setup values are local civil time. RtcManager discounts DST before
+    // storing standard time and verifies the RTC write by read-back.
     RtcManager::setDateTime(_cfgYear, _cfgMonth, _cfgDay,
                             _cfgHour, _cfgMinute, 0);
     _mode = DisplayMode::CLOCK;
@@ -365,9 +367,8 @@ void ClockApp::renderClock()
     TimeOfDay t = RtcManager::getTime();
     DateValue d = RtcManager::getDate();
 
+    // The RTC manager's cache is already converted to local civil time.
     uint8_t displayHour = t.hour;
-    if (RtcManager::isDstActive())
-        displayHour = (displayHour + 1) % 24;
     if (_use12Hour)
     {
         displayHour %= 12;
