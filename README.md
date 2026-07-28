@@ -40,15 +40,25 @@ The exception is scrolling text and short animations, which deliberately use bri
 
 ### Pinout
 
-| Pro Mini pin | Connects to | Notes |
-|---|---|---|
-| D3 | MODE button to GND | Active low, internal pull-up; INT1-capable |
-| D4 | UP button to GND | Active low, internal pull-up |
-| D5 | DOWN button to GND | Active low, internal pull-up |
-| D6 | resistor, then matrix DIN | WS2812B data |
-| A4 / SDA | DS3231 SDA and BME280 SDA | Shared I2C data |
-| A5 / SCL | DS3231 SCL and BME280 SCL | Shared I2C clock |
-| GND | All device grounds | The Pro Mini and external LED supply must share ground |
+The release firmware, `src/config.h`, and the Wokwi diagram all use the same
+signal assignments. The Nano pins in the simulation are electrically equivalent
+to the Pro Mini pins used by the physical build.
+
+| Physical Pro Mini | Wokwi Nano | Connects to | Wiring notes |
+|---|---|---|---|
+| D3 | D3 | MODE button | Other button terminal to GND; active low with internal pull-up; INT1-capable |
+| D4 | D4 | UP button | Other button terminal to GND; active low with internal pull-up |
+| D5 | D5 | DOWN button | Other button terminal to GND; active low with internal pull-up |
+| D6 | D6 | 330-470 ohm resistor, then matrix DIN | Connect to DIN, not DOUT |
+| A4 / SDA | A4 | DS3231 SDA and BME280 SDA/SDI | Shared I2C data bus |
+| A5 / SCL | A5 | DS3231 SCL and BME280 SCL/SCK | Shared I2C clock bus |
+| VCC / 5 V | 5 V | DS3231 and suitable BME280 breakout power | Confirm the breakout accepts 5 V; a bare BME280 does not |
+| External regulated 5 V | 5 V | Matrix VDD | Power the matrix directly from the 4 A supply, not through the Pro Mini |
+| GND | GND | Pro Mini, matrix, RTC, BME280, buttons, and external supply | Every component must share the same ground reference |
+
+On the custom Wokwi BME280, `CS` is tied to VDD for I2C operation and `SDO`
+is tied to GND to select address `0x76`. The firmware also probes `0x77` for
+breakout boards wired with SDO high.
 
 ### Power and electrical guidance
 
@@ -62,9 +72,10 @@ Many BME280 breakouts contain a 3.3 V regulator and level shifting and accept 5 
 
 Physical hardware defaults to a vertical, column-major serpentine arrangement:
 
-- column 0 runs top to bottom;
-- column 1 runs bottom to top;
-- subsequent columns alternate.
+- LED 0 is at the bottom-right;
+- the chain first rises through the rightmost column;
+- it then moves one column left and alternates downward/upward while progressing
+  from right to left.
 
 Set `MATRIX_LAYOUT` in `src/config.h` or through a build flag if your panel is progressive row-major or serpentine row-major. A wrong selection produces mirrored, striped, or scrambled graphics without harming the LEDs.
 
@@ -161,7 +172,7 @@ the same `nano_328p_wokwi` firmware loaded by `wokwi.toml`.
 
 | Temperature | Humidity | Pressure |
 |---|---|---|
-| ![Wokwi temperature screen](wokwi-temperature.png) | ![Wokwi humidity screen](wokwi-humidity.png) | ![Wokwi pressure screen](wokwi-pressure.png) |
+| <img src="https://raw.githubusercontent.com/jvalver1/8X32_LED_CLOCK/13e4f207a8f2307e513a5345abb42a7dd0789a4f/wokwi-temperature.png" alt="Wokwi temperature screen" width="320"> | <img src="https://raw.githubusercontent.com/jvalver1/8X32_LED_CLOCK/13e4f207a8f2307e513a5345abb42a7dd0789a4f/wokwi-humidity.png" alt="Wokwi humidity screen" width="320"> | <img src="https://raw.githubusercontent.com/jvalver1/8X32_LED_CLOCK/13e4f207a8f2307e513a5345abb42a7dd0789a4f/wokwi-pressure.png" alt="Wokwi pressure screen" width="320"> |
 
 The following full-matrix RGB test frames show the simulator retaining colour
 gradations at low and high intensity after correcting the Wokwi brightness
@@ -169,7 +180,7 @@ multiplier and moving the icon artwork to RGB888.
 
 | Low-intensity RGB gradient | High-intensity RGB gradient |
 |---|---|
-| ![Wokwi low-intensity RGB gradient](wokwi-rainbow-early.png) | ![Wokwi high-intensity RGB gradient](wokwi-rainbow-late.png) |
+| <img src="https://raw.githubusercontent.com/jvalver1/8X32_LED_CLOCK/13e4f207a8f2307e513a5345abb42a7dd0789a4f/wokwi-rainbow-early.png" alt="Wokwi low-intensity RGB gradient" width="480"> | <img src="https://raw.githubusercontent.com/jvalver1/8X32_LED_CLOCK/13e4f207a8f2307e513a5345abb42a7dd0789a4f/wokwi-rainbow-late.png" alt="Wokwi high-intensity RGB gradient" width="480"> |
 
 ## Configuration
 
@@ -195,6 +206,27 @@ Edit `src/config.h`, or override guarded values with PlatformIO `build_flags`.
 
 Optional compile-time features include `FEATURE_BOOT_ANIMATION` and the currently unimplemented/disabled `FEATURE_AUTO_BRIGHTNESS` hook.
 
+## Inspiration and development
+
+This clock was inspired by the open-source
+[AWTRIX 3 project](https://github.com/Blueforcer/awtrix3) and its approach to
+presenting compact information and colourful icons on an 8x32 pixel display.
+This repository is an independent implementation and does not contain AWTRIX
+source code.
+
+According to the project author, the code and documentation in this repository
+were developed entirely through vibe coding with ChatGPT, using GPT-5.6 Sol in
+Light reasoning mode. Juanjov supplied the requirements, hardware decisions,
+visual direction, iterative feedback, and physical validation; ChatGPT generated
+and revised the implementation.
+
+Repository and file timestamps show seven distinct development periods between
+21 and 28 July 2026. Their observed spans, plus allowance for isolated sessions
+represented by only one saved file, support an estimated **12-18 hours of active
+vibe coding**. This is an estimate rather than a time-sheet measurement. A
+reliable cumulative token count is unavailable because no complete token-usage
+ledger was exported with the project or its chat history.
+
 ## Troubleshooting
 
 - **No display:** verify external 5 V, common ground, DIN rather than DOUT, D6, data resistor, and matrix layout.
@@ -206,4 +238,9 @@ Optional compile-time features include `FEATURE_BOOT_ANIMATION` and the currentl
 
 ## License
 
-No license has been selected. Until one is added, copyright law reserves reuse and redistribution rights to the author even though the repository is public.
+Copyright (c) 2026 Juanjov (jvalver1).
+
+This project is distributed under the permissive [MIT License](LICENSE). It may
+be used, copied, modified, and redistributed—including commercially—provided
+that the copyright and license notices naming Juanjov are preserved. The
+license includes the standard warranty and liability disclaimer.
