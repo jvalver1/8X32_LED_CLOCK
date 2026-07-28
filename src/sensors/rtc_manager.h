@@ -62,6 +62,7 @@ public:
 
     /** @return true if the RTC has valid time (no power-loss event). */
     static bool isValid();
+    static bool isDstActive();
 
     // -----------------------------------------------------------------------
     // Setters (write to RTC via I²C)
@@ -69,12 +70,16 @@ public:
 
     static void setTime(uint8_t hour, uint8_t minute, uint8_t second);
     static void setDate(uint8_t day, uint8_t month, uint16_t year);
+    static void setDateTime(uint16_t year, uint8_t month, uint8_t day,
+                            uint8_t hour, uint8_t minute, uint8_t second);
+    static bool calculateEuropeanDst(uint16_t year, uint8_t month, uint8_t day);
 
 private:
     static RTC_DS3231 _rtc;
     static TimeOfDay  _cachedTime;
     static DateValue  _cachedDate;
     static bool       _valid;
+    static bool       _dstActive;
 
     RtcManager() = delete;
 };

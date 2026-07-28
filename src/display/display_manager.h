@@ -4,7 +4,7 @@
  *
  * @details Wraps FastLED and provides:
  *          - Pixel-level set/clear helpers
- *          - 5×7 bitmap font rendering for digits and characters
+ *          - Compact 3x5 bitmap rendering for digits and separators
  *          - Scrolling text support
  *          - Boot animation
  *          - Frame buffering and brightness control
@@ -20,6 +20,9 @@
 // Scroll direction
 // ---------------------------------------------------------------------------
 enum class ScrollDir : uint8_t { LEFT, RIGHT };
+
+/** Environmental icon stored as native 24-bit RGB888 artwork. */
+enum class EnvironmentalIcon : uint8_t { TEMPERATURE, HUMIDITY, PRESSURE };
 
 // ---------------------------------------------------------------------------
 // DisplayManager (static class / namespace-style)
@@ -46,6 +49,16 @@ public:
 
     /** Get current brightness. */
     static uint8_t getBrightness();
+
+    /** Set/get the user-facing brightness level (1..10). */
+    static void setBrightnessLevel(uint8_t level);
+    static uint8_t getBrightnessLevel();
+
+    /** Advance to the next of 16 font colours with a smooth transition. */
+    static void cycleFontColor();
+
+    /** Return the current interpolated font colour. */
+    static CRGB fontColor();
 
     /** Step brightness up by one level (wraps). */
     static void brightnessUp();
@@ -89,7 +102,7 @@ public:
      * @brief  Draw a single ASCII character at (x, y).
      * @param  x      Top-left column
      * @param  y      Top-left row
-     * @param  c      ASCII character
+     * @param  c      Digit or ':' / ';' separator
      * @param  color  Foreground colour
      * @return Width of the character in pixels (including 1px spacing)
      */
@@ -100,6 +113,13 @@ public:
      * @return Total pixel width of the string
      */
     static int16_t drawString(int16_t x, int16_t y, const char* str, CRGB color);
+
+    /**
+     * @brief Draw an environmental icon in columns 0..7 and rows 0..7.
+     *
+     * RGB888 values map directly to FastLED's 8-bit RGB channels.
+     */
+    static void drawEnvironmentalIcon(EnvironmentalIcon icon);
 
     /**
      * @brief  Scroll a string across the display once (blocking).
@@ -116,9 +136,6 @@ public:
     /** Draw the 9x8 calendar page with red banner and day number on cols 0..8. */
     static void drawCalendarPage(uint8_t day);
 
-    /** Draw custom 4x7 bold digit at (x, y). Returns width in pixels. */
-    static uint8_t drawCustom4x7Digit(int16_t x, int16_t y, char c, CRGB color);
-
     /** Draw the full clock screen matching reference photo (Calendar + Time + Day of Week bar). */
     static void drawClockScreen(uint8_t day, uint8_t dayOfWeek, uint8_t hour, uint8_t minute, bool colonVisible);
 
@@ -132,6 +149,15 @@ public:
     /** Brief flash/transition between display modes. */
     static void playTransition();
 
+    /** Save the outgoing screen before a pull-down transition begins. */
+    static void capturePullDownFrame();
+
+    /**
+     * Composite one pull-down step over the newly rendered incoming screen.
+     * Progress ranges from 1 to MATRIX_HEIGHT.
+     */
+    static void composePullDownFrame(uint8_t progress);
+
 private:
     // Internal frame buffer
     static CRGB _leds[NUM_LEDS];
@@ -139,9 +165,13 @@ private:
     // Current brightness level index
     static uint8_t _brightness;
 
-    // Brightness step levels
     static const uint8_t BRIGHTNESS_STEPS[];
     static const uint8_t NUM_BRIGHTNESS_STEPS;
+
+    static uint8_t _paletteIndex;
+    static CRGB _colorFrom;
+    static uint32_t _colorTransitionStart;
+    static uint8_t _pullDownFrame[NUM_LEDS];
 
     DisplayManager() = delete; // Static class – do not instantiate
 };

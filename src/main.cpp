@@ -5,21 +5,20 @@
  * @details Main application loop for the LED clock. Coordinates:
  *          - Time display (fetched from DS3231 RTC)
  *          - Date display mode
- *          - Temperature & pressure display (from BMP280)
+ *          - Temperature, humidity and pressure display (from BME280)
  *          - Button handling for configuration
  *          - Display animations/transitions
  *
  * @hardware
- *   MCU  : Arduino Nano (ATmega328P @ 16 MHz)
+ *   MCU  : Arduino Pro Mini (ATmega328P, 5 V @ 16 MHz)
  *   LEDs : 8x32 WS2812B matrix  → Pin D6
  *   RTC  : DS3231 (I2C)         → SDA=A4, SCL=A5
- *   Sens : BMP280 (I2C)         → SDA=A4, SCL=A5  (addr 0x76)
- *   BTN1 : Mode   button        → Pin D2  (INT0, active LOW, pull-up)
- *   BTN2 : Up/Inc button        → Pin D3  (INT1, active LOW, pull-up)
- *   BTN3 : Down/Dec button      → Pin D4  (active LOW, pull-up)
+ *   Sens : BME280 (I2C)         → SDA=A4, SCL=A5  (addr 0x76)
+ *   BTN1 : Mode   button        → Pin D3  (INT1, active LOW, pull-up)
+ *   BTN2 : Up/Inc button        → Pin D4  (active LOW, pull-up)
+ *   BTN3 : Down/Dec button      → Pin D5  (active LOW, pull-up)
  *
- * @note    BMP280 measures temperature and pressure ONLY.
- *          For humidity, a BME280 would be required.
+ * @note    BME280 provides all three environmental readings over I2C.
  *
  * @author  Your Name
  * @date    2026-07-21
@@ -31,7 +30,7 @@
 #include "config.h"
 #include "display/display_manager.h"
 #include "sensors/rtc_manager.h"
-#include "sensors/bmp_manager.h"
+#include "sensors/bme_manager.h"
 #include "input/button_manager.h"
 #include "app/clock_app.h"
 
@@ -56,7 +55,7 @@ void setup()
     // Initialise sub-systems
     ButtonManager::init();
     RtcManager::init();
-    BmpManager::init();
+    BmeManager::init();
     DisplayManager::init();
 
     // Boot animation

@@ -1,0 +1,38 @@
+name: Environmental icon screens
+version: 1
+author: 8x32 LED Clock Project
+steps:
+  - delay: 2500ms
+
+  # CLOCK -> DATE
+  - set-control: { part-id: btn_down, control: pressed, value: 1 }
+  - delay: 100ms
+  - set-control: { part-id: btn_down, control: pressed, value: 0 }
+  - delay: 500ms
+
+  # DATE -> TEMPERATURE
+  - set-control: { part-id: btn_down, control: pressed, value: 1 }
+  - delay: 100ms
+  - set-control: { part-id: btn_down, control: pressed, value: 0 }
+  - delay: 500ms
+  - take-screenshot:
+      part-id: matrix
+      save-to: wokwi-temperature.png
+
+  # TEMPERATURE -> HUMIDITY
+  - set-control: { part-id: btn_down, control: pressed, value: 1 }
+  - delay: 100ms
+  - set-control: { part-id: btn_down, control: pressed, value: 0 }
+  - delay: 500ms
+  - take-screenshot:
+      part-id: matrix
+      save-to: wokwi-humidity.png
+
+  # HUMIDITY -> PRESSURE
+  - set-control: { part-id: btn_down, control: pressed, value: 1 }
+  - delay: 100ms
+  - set-control: { part-id: btn_down, control: pressed, value: 0 }
+  - delay: 500ms
+  - take-screenshot:
+      part-id: matrix
+      save-to: wokwi-pressure.png

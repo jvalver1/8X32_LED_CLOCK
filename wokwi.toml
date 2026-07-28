@@ -6,7 +6,7 @@
 #
 # Prerequisites:
 #   1. Install "Wokwi Simulator" extension in VS Code.
-#   2. Compile the project:  pio run -e nano_328p
+#   2. Compile both targets:  platformio run
 #   3. Press F1 → "Wokwi: Start Simulator"
 #
 # The firmware paths MUST match the PlatformIO build environment.
@@ -19,8 +19,8 @@ firmware = ".pio/build/nano_328p_wokwi/firmware.hex"
 elf      = ".pio/build/nano_328p_wokwi/firmware.elf"
 
 [[chip]]
-name = "bmp280"
-binary = "chips/bmp280.chip.wasm"
+name = "bme280"
+binary = "chips/bme280.chip.wasm"
 
 [[chip]]
 name = "ds3231"

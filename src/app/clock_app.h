@@ -50,6 +50,7 @@ private:
     static uint32_t _lastRtcUpdate;
     static uint32_t _lastSensorUpdate;
     static uint32_t _lastAutoScroll;
+    static uint32_t _carouselDelay;
 
     // Temporary configuration storage (used in SET_* modes)
     static uint8_t  _cfgHour;
@@ -57,6 +58,10 @@ private:
     static uint8_t  _cfgDay;
     static uint8_t  _cfgMonth;
     static uint16_t _cfgYear;
+    static bool     _cfg12Hour;
+    static uint8_t  _cfgBrightness;
+    static bool     _use12Hour;
+    static uint32_t _lastSetupActivity;
 
     // -----------------------------------------------------------------------
     // Private helpers
@@ -72,14 +77,18 @@ private:
     static void renderClock();
     static void renderDate();
     static void renderTemperature();
+    static void renderHumidity();
     static void renderPressure();
-    static void renderBrightness();
     static void renderConfig();
 
     // Config mode helpers
     static void enterConfig();
     static void applyConfig();
-    static void cancelConfig();
+    static bool isSetupMode();
+    static void cycleCarousel();
+    static void advanceCarousel();
+    static uint8_t daysInMonth(uint8_t month, uint16_t year);
+    static void clampConfigDay();
 
     ClockApp() = delete;
 };
