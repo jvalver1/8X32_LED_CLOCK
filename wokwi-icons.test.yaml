@@ -1,14 +1,20 @@
-name: Environmental icon screens
+name: Display screens
 version: 1
 author: 8x32 LED Clock Project
 steps:
   - delay: 2500ms
+  - take-screenshot:
+      part-id: matrix
+      save-to: wokwi-clock.png
 
   # CLOCK -> DATE
   - set-control: { part-id: btn_down, control: pressed, value: 1 }
   - delay: 100ms
   - set-control: { part-id: btn_down, control: pressed, value: 0 }
   - delay: 500ms
+  - take-screenshot:
+      part-id: matrix
+      save-to: wokwi-date.png
 
   # DATE -> TEMPERATURE
   - set-control: { part-id: btn_down, control: pressed, value: 1 }
