@@ -164,10 +164,29 @@ The 1-10 brightness value is the stable user-facing setting; the firmware maps i
 
 ## RTC synchronization and daylight saving time
 
-The DS3231 is the authoritative clock. The firmware does not maintain an
+The DS3231 is the authoritative clock and continues counting from its backup
+battery while the controller is unpowered. The firmware does not maintain an
 independent `millis()`-based wall clock that could slowly drift away from the
-RTC. Instead, it reads the DS3231 once per second and rebuilds the cached local
-date and time used by every display screen.
+RTC. `millis()` is used only to schedule the next poll; the displayed seconds,
+minutes, date, and weekday always come from the most recent DS3231 reading.
+
+To keep display rendering fast and avoid unnecessary I2C traffic, the
+application keeps a local civil-time cache. Every screen reads this cache rather
+than accessing the RTC directly. The DS3231 is accessed at these times:
+
+| When | DS3231 access | Purpose |
+|---|---|---|
+| Startup | Probe the device and read its power-loss flag | Confirm that the RTC is available and determine whether its stored time can be trusted |
+| Startup after a power-loss indication | Write `2026-01-01 00:00:00` standard time | Establish a known baseline for a new or discharged RTC; the user must then set the correct local time |
+| Startup after initialization | Read once immediately | Populate the cache before normal application operation |
+| Normal operation | Read every `RTC_POLL_MS` (1000 ms) | Refresh all displayed time/date fields from the hardware time source and recalculate DST |
+| Saving setup changes | Write the complete date and time, then read immediately | Store the edited value and verify the hardware registers; a read-back equal to the requested second or the following second is accepted |
+| Immediately after a setup write | Read once more through the normal cache update | Make the newly saved local time visible without waiting for the next periodic poll |
+
+If the DS3231 cannot be initialized, the RTC cache remains invalid and no
+further periodic reads or setup writes are attempted. The application does not
+synthesize elapsed wall time from `millis()`; accuracy therefore never depends
+on controller loop timing.
 
 The RTC always stores **standard time**. The application exposes **local civil
 time**:
